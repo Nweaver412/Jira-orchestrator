@@ -1,30 +1,23 @@
 import os
 import json
-import toml
+from dotenv import load_dotenv
 from google.cloud import storage
 from google.cloud import contact_center_insights_v1
 from google.auth import exceptions
 
-def load_secrets():
-    try:
-        with open("secrets.toml", "r") as secrets_file:
-            secrets = toml.load(secrets_file)
-        return secrets
-    except FileNotFoundError:
-        print("Error: secrets.toml file not found.")
-        return None
+load_dotenv()
 
 def authenticate_gcp():
     try:
-        key_file_path = "/Desktop/Jira-Curated-Project/keboola-ai-4afb21575d2e.json"
+        key_file_path = "service_acct_path"
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_file_path
 
         storage_client = storage.Client()
         contact_center_insights_client = contact_center_insights_v1.ContactCenterInsightsClient()
 
-        print("Authentication successful.")
+        print("Success")
     except exceptions.DefaultCredentialsError as e:
-        print(f"Error authenticating to GCP: {e}")
+        print(f"Error: {e}")
 
 def read_data_from_gcs(bucket_name, folder_name):
     storage_client = storage.Client()
@@ -54,23 +47,26 @@ def send_to_contact_center_insights(project_id, conversation_data):
         }
     )
 
-    # Analyze the conversation
     analysis = contact_center_insights_client.create_analysis(
         parent=conversation.name,
         analysis={
-            # Specify analysis details as needed
+            "query": {
+                "language_code": "en" 
+            },
+            "output_data_config": {
+                "gcs_destination": {
+                    "uri": "/upload1/jira_curated_en"  
+                }
+            }
         }
     )
-
-    # Handle responses and results
-    # (code to process the results and handle errors)
 
 def main():
     authenticate_gcp()
 
-    gcs_bucket_name = "jira_curated"
-    gcs_folder_name = "/upload1/1074750538_jira_curation.zip"
-    contact_center_insights_project_id = "4717244637851503026"
+    gcs_bucket_name = "gcd_bucket"
+    gcs_folder_name = "gcs_file_path"
+    contact_center_insights_project_id = "ccai_id"
 
     data = read_data_from_gcs(gcs_bucket_name, gcs_folder_name)
     send_to_contact_center_insights(contact_center_insights_project_id, data)
