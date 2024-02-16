@@ -5,11 +5,19 @@ from google.cloud import storage
 from google.cloud import contact_center_insights_v1
 from google.auth import exceptions
 
+# Load environment variables
 load_dotenv()
+
+# Environment variables
+
+gcs_bucket = os.getenv('GCD_BUCKET')
+gcs_file_path = os.getenv('GCS_FILE_PATH')
+ccai_id = os.getenv('CCAI_ID')
+
 
 def authenticate_gcp():
     try:
-        key_file_path = "service_acct_path"
+        key_file_path = "ADD FILEPATH HERE"
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_file_path
 
         storage_client = storage.Client()
@@ -33,18 +41,24 @@ def read_data_from_gcs(bucket_name, folder_name):
 def send_to_contact_center_insights(project_id, conversation_data):
     contact_center_insights_client = contact_center_insights_v1.ContactCenterInsightsClient()
     conversation = contact_center_insights_client.create_conversation(
-        parent=f"projects/{project_id}/locations/global",
+        parent = (contact_center_insights_v1.ContactCenterInsightsClient(project_id, "global")
+        )        
         conversation={
-            "utterances": [
-                {
-                    "text": entry.get("text", ""),
-                    "role": entry.get("role", "AGENT"),
-                    "user_id": entry.get("user_id", ""),
-                    "start_timestamp": {"seconds": int(entry.get("start_timestamp_usec", 0)) // 1000000},
-                }
-                for entry in conversation_data
-            ]
-        }
+            "transcript": {
+                "transcript_segments": [
+                    {
+                        "segment_participant": {
+                            "role": "AGENT",
+                            "dialogflow_participant_name": entry.get("user_id", "")
+                        },
+                        "segment_start_time": {
+                            "seconds": int(entry.get("start_timestamp_usec", 0)) // 1000000
+                        },
+                        "text": entry.get("text", ""),
+                    } for entry in conversation_data
+                ]
+            },
+        },
     )
 
     analysis = contact_center_insights_client.create_analysis(
@@ -55,7 +69,7 @@ def send_to_contact_center_insights(project_id, conversation_data):
             },
             "output_data_config": {
                 "gcs_destination": {
-                    "uri": "/upload1/jira_curated_en"  
+                    "uri": "gs://jira_curated/upload1/jira_curated_en.zip"  
                 }
             }
         }
@@ -64,9 +78,9 @@ def send_to_contact_center_insights(project_id, conversation_data):
 def main():
     authenticate_gcp()
 
-    gcs_bucket_name = "gcd_bucket"
-    gcs_folder_name = "gcs_file_path"
-    contact_center_insights_project_id = "ccai_id"
+    gcs_bucket_name = gcs_bucket
+    gcs_folder_name = gcs_file_path
+    contact_center_insights_project_id = ccai_id
 
     data = read_data_from_gcs(gcs_bucket_name, gcs_folder_name)
     send_to_contact_center_insights(contact_center_insights_project_id, data)
